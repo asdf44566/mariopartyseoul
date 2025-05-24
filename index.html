@@ -1,0 +1,384 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>마리오파티: 서울 지하철판 + 뽑기 시스템</title>
+  <style>
+    body { background-color: #1e1e1e; color: white; font-family: 'Arial', sans-serif; text-align: center; padding: 30px; }
+    button {
+      font-size: 20px; padding: 10px 20px; border: none; border-radius: 10px;
+      background-color: #ffcc00; cursor: pointer; transition: background-color 0.3s; margin: 10px; width: 90%; max-width: 300px;  box-sizing: border-box;
+    }
+    button:hover { background-color: #ffaa00; }
+    .log, .history {
+      background: rgba(255, 255, 255, 0.05); border: 1px solid #666; padding: 15px;
+      margin-top: 20px; border-radius: 10px; max-width: 800px; margin-left: auto; margin-right: auto;
+    }
+    .hidden { display: none; }
+    .result { margin-top: 20px; font-size: 22px; min-height: 60px; white-space: pre-wrap; }
+    .history-title { font-size: 18px; margin-bottom: 10px; border-bottom: 1px solid #666; padding-bottom: 5px; }
+    .history-item { margin-bottom: 10px; font-size: 14px; text-align: left; }
+@media screen and (max-width: 600px) {
+  h1, h2 {
+    font-size: 22px;
+  }
+
+  button, input {
+    font-size: 16px;
+    padding: 10px;
+  }
+
+  .result, .history-item {
+    font-size: 16px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <h1>🎲 마리오파티 - 서울 지하철판</h1>
+
+  <div id="characterSelection">
+    <p>캐릭터를 선택하세요:</p>
+    <button onclick="selectCharacter('마리오')">마리오</button>
+    <button onclick="selectCharacter('루이지')">루이지</button>
+    <button onclick="selectCharacter('피치')">피치</button>
+    <button onclick="selectCharacter('요시')">요시</button>
+    <button onclick="selectCharacter('쿠파')">쿠파</button>
+  </div>
+
+  <div id="gameArea" class="hidden">
+    <p><strong>선택한 캐릭터:</strong> <span id="currentCharacter"></span></p>
+    <p><strong>능력 설명:</strong> <span id="abilityDesc"></span></p>
+
+    <button onclick="rollDice()">🎲 주사위 굴리기</button>
+    <p>주사위 결과: 
+      <span id="diceResult">-</span> 
+      <span id="abilityTrigger" style="margin-left:10px; color:green;"></span>
+    </p>
+
+    <div id="abilityButtons"></div>
+
+    <input type="text" id="stationInput" placeholder="역 이름 입력">
+    <button onclick="checkStation()">✅ 칸 확인</button>
+    <p>해당 칸 정보: <span id="stationInfo">-</span></p>
+
+    <div class="log" id="logBox"></div>
+  </div>
+
+  <hr style="margin: 40px 0;">
+
+  <h2>🎁 뽑기 시스템</h2>
+  <button onclick="drawEvent()">이벤트 뽑기</button>
+  <div class="result" id="result-event">여기 이벤트 결과가 표시됩니다</div>
+  <div class="history" id="history-event"><div class="history-title">📜 이벤트 기록</div></div>
+
+  <button onclick="drawLucky()">럭키칸 뽑기</button>
+  <div class="result" id="result-lucky">여기 럭키칸 결과가 표시됩니다</div>
+  <div class="history" id="history-lucky"><div class="history-title">🍀 럭키칸 기록</div></div>
+
+  <button onclick="drawUnlucky()">언럭키칸 뽑기</button>
+  <div class="result" id="result-unlucky">여기 언럭키칸 결과가 표시됩니다</div>
+  <div class="history" id="history-unlucky"><div class="history-title">💀 언럭키칸 기록</div></div>
+
+  <button onclick="drawShop()">상점 열기</button>
+  <div class="result" id="result-shop">여기 상점 아이템이 표시됩니다</div>
+  <div class="history" id="history-shop"><div class="history-title">🛍️ 상점 아이템 기록</div></div>
+
+<hr style="margin: 40px 0;">
+<h2>🎰 배팅 룰렛</h2>
+<p>배팅할 코인을 입력하세요:</p>
+<input type="number" id="betAmount" min="1" placeholder="코인 수">
+<button onclick="spinRoulette()">룰렛 돌리기</button>
+
+<div class="result" id="betResult">결과가 여기에 표시됩니다.</div>
+<div class="history" id="betHistory">
+  <div class="history-title">📜 배팅 기록</div>
+</div>
+
+
+  <script>
+    let character = '';
+    let marioUses = 3;
+    let luigiUses = 3;
+    let koopaUsed = false;
+
+    const characterAbilities = {
+      '마리오': '게임 중 총 3번, 아무 위치에서든 상점 이용 가능',
+      '루이지': '총 3번, 역주행 가능',
+      '피치': '매 턴 10% 확률로 모든 팀에게서 5코인씩 수금',
+      '요시': '매 턴 5% 확률로 원하는 역으로 순간이동',
+      '쿠파': '게임 중 단 한 번, 다른 팀의 스타 1개 강탈'
+    };
+
+    function selectCharacter(name) {
+      character = name;
+      document.getElementById("currentCharacter").textContent = name;
+      document.getElementById("abilityDesc").textContent = characterAbilities[name];
+      document.getElementById("characterSelection").classList.add("hidden");
+      document.getElementById("gameArea").classList.remove("hidden");
+      updateAbilityButtons();
+      log(`🎮 ${name} 캐릭터 선택 완료!`);
+    }
+
+    function updateAbilityButtons() {
+      const container = document.getElementById("abilityButtons");
+      container.innerHTML = '';
+      if (character === '마리오') {
+        container.innerHTML = `<button onclick="useMario()">🏪 상점 이용 (${marioUses}회 남음)</button>`;
+      } else if (character === '루이지') {
+        container.innerHTML = `<button onclick="useLuigi()">🔁 역주행 (${luigiUses}회 남음)</button>`;
+      } else if (character === '쿠파') {
+        container.innerHTML = `<button onclick="useKoopa()" ${koopaUsed ? 'disabled' : ''}>⭐ 스타 강탈 (${koopaUsed ? '사용 완료' : '1회 가능'})</button>`;
+      }
+    }
+
+    function useMario() {
+      if (marioUses > 0) {
+        marioUses--;
+        log(`🏪 마리오 능력 사용! 상점 어디서든 접근 가능 (${marioUses}회 남음)`);
+        updateAbilityButtons();
+      }
+    }
+
+    function useLuigi() {
+      if (luigiUses > 0) {
+        luigiUses--;
+        log(`🔁 루이지 능력 사용! 역주행 실행 (${luigiUses}회 남음)`);
+        updateAbilityButtons();
+      }
+    }
+
+    function useKoopa() {
+      if (!koopaUsed) {
+        koopaUsed = true;
+        log(`💥 쿠파 능력 발동! 다른 팀에서 스타 1개 강탈!`);
+        updateAbilityButtons();
+      }
+    }
+
+    function rollDice() {
+      const roll = Math.floor(Math.random() * 9) + 2;
+      document.getElementById("diceResult").textContent = roll;
+      let abilityMessage = "";
+
+      if (character === '피치' && Math.random() < 0.10) {
+        abilityMessage = "💰 코인 수금!";
+        log("💰 피치 능력 발동! 모든 팀에게서 5코인씩 수금!");
+      }
+      if (character === '요시' && Math.random() < 0.05) {
+        abilityMessage = "🐊 순간이동 가능!";
+        log("🐊 요시 능력 발동! 원하는 역으로 순간이동 가능!");
+      }
+
+      document.getElementById("abilityTrigger").textContent = abilityMessage;
+      log(`🎲 주사위 결과: ${roll}`);
+    }
+
+const stationTypes = {
+  "신도림": "대결칸 - 도착하면 스태프의 지시를 따라주세요",
+  "대림": "이벤트칸2 - (고유이벤트) 프로팰러 버섯을 먹어서 4칸 더 이동할 수 있게 됨!",
+  "구로디지털단지": "배팅칸 - 대역전의 기회!",
+  "신대방": "럭키칸 - 행운이 당신을 찾아갑니다!",
+  "신림": "미션칸 - 도착하면 스태프의 지시를 따라주세요",
+  "봉천": "이벤트칸1 - 무슨 일이 벌어질까요~?",
+  "서울대입구": "플러스칸 - (히든)키노피오가 서울대에 합격했어요~ 그래서 10코인을 쏜대요!",
+  "낙성대": "마이너스칸 - 마이너스칸 (전반기 -3 / 후반기 -6)",
+  "사당": "배팅칸 - 대역전의 기회!",
+  "방배": "언럭키칸 - 수고…",
+  "서초": "마이너스칸 - 마이너스칸 (전반기 -3 / 후반기 -6)",
+  "교대": "이벤트칸1 - 무슨 일이 벌어질까요~? ",
+  "강남": "마이너스칸 - 마이너스칸 (전반기 -3 / 후반기 -6)",
+  "역삼": "이벤트칸2 - (고유이벤트) 이상한 변호사 일 도와줘서 10코인을 얻었어요!",
+  "선릉": "럭키칸 - 행운이 당신을 찾아갑니다!",
+  "삼성": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "종합운동장": "언럭키칸 - 수고…",
+  "잠실새내": "마이너스칸 - 마이너스칸 (전반기 -3 / 후반기 -6)",
+  "잠실": "미션칸 - 도착하면 스태프의 지시를 따라주세요",
+  "잠실나루": "이벤트칸2 - (고유이벤트) 한강이 범람해서 휩쓸리다가 10코인을 잃었어요 ㅠㅠ",
+  "강변": "이벤트칸1 - 무슨 일이 벌어질까요~?",
+  "구의": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "건대입구": "언럭키칸 - 수고…",
+  "성수": "대결칸 - 도착하면 스태프의 지시를 따라주세요",
+  "뚝섬": "마이너스칸 - 마이너스칸 (전반기 -3 / 후반기 -6)",
+  "한양대": "럭키칸 - 행운이 당신을 찾아갑니다!",
+  "왕십리": "배팅칸 - 대역전의 기회!",
+  "상왕십리": "마이너스칸 - 마이너스칸 (전반기 -3 / 후반기 -6)",
+  "신당": "이벤트칸1 - 무슨 일이 벌어질까요~?",
+  "동대문역사문화공원": "미션칸 - 도착하면 스태프의 지시를 따라주세요",
+  "을지로4가": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6) + (히든) 히든박스 발견! 코인 10개를 추가로 얻었어요!",
+  "을지로3가": "마이너스칸 (전반기 -3 / 후반기 -6)",
+  "을지로입구": "이벤트칸1 - 무슨 일이 벌어질까요~?",
+  "시청":  "대결칸 - 도착하면 스태프의 지시를 따라주세요",
+  "충정로": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "아현": "럭키칸 - 행운이 당신을 찾아갑니다!",
+  "이대": "배팅칸 - 대역전의 기회!",
+  "신촌": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "홍대입구": "미션칸 - 도착하면 스태프의 지시를 따라주세요",
+  "합정": "이벤트칸 - (고유이벤트) 부끄부끄가 한강 유람선 타고 싶은데 돈 없어서 10코인 뺏어갔어요~",
+  "당산": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "영등포구청": "이벤트칸1 - 무슨 일이 벌어질까요~?",
+  "문래": "마이너스칸 (전반기 -3 / 후반기 -6)",
+  "고속터미널": "미션칸 - 도착하면 스태프의 지시를 따라주세요",
+  "잠원": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "신사": "마이너스칸 (전반기 -3 / 후반기 -6)",
+  "압구정": "럭키칸 - 행운이 당신을 찾아갑니다!",
+  "옥수": "이벤트칸1 - 무슨 일이 벌어질까요~?",
+  "금호": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "약수": "언럭키칸 - 수고…",
+  "동대입구": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6) + (히든) 남산에서 관광객을 도와서 10코인 얻었어요!",
+  "충무로": "배팅칸 - 대역전의 기회!",
+  "애오개": "마이너스칸 (전반기 -3 / 후반기 -6)",
+  "공덕": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "마포": "언럭키칸 - 수고…",
+  "여의나루": "미션칸 - 도착하면 스태프의 지시를 따라주세요",
+  "여의도": "배팅칸 - 대역전의 기회!",
+  "신길": "럭키칸 - 행운이 당신을 찾아갑니다!",
+  "영등포시장": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6) + (히든) 히든박스 발견! 코인 10개를 얻었어요!",
+  "반포": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6) + (히든) 루이지가 반포자이를 자가로 샀대요~ ! 20코인을 쏘겠답니다!",
+  "논현": "이벤트칸1 - 무슨 일이 벌어질까요~?",
+  "학동": "언럭키칸 - 수고…",
+  "강남구청": "럭키칸 - 행운이 당신을 찾아갑니다!",
+  "청담": "배팅칸 - 대역전의 기회!",
+  "자양": "미션칸 - 도착하면 스태프의 지시를 따라주세요",
+  "노량진": "마이너스칸 (전반기 -3 / 후반기 -6) + (히든)마귀가 고시 시험을 3번이나 떨어졌대요,,, 그래서 10코인을 기부하기로 했어요 ㅠ",
+  "동작": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "신논현": "럭키칸 - 행운이 당신을 찾아갑니다!",
+  "선정릉": "플러스칸 - 플러스칸 (전반기 +3 / 후반기 +6)",
+  "봉은사": "마이너스칸 (전반기 -3 / 후반기 -6) + (히든)데이지가 코엑스에서 돈 10코인을 잃어버려서 코인을 나눠줬어요 ㅠ",
+  // 나머지 역도 동일한 방식으로 추가 가능
+};
+
+
+    function checkStation() {
+      const station = document.getElementById("stationInput").value.trim();
+      const info = stationTypes[station] || "알 수 없는 칸";
+      document.getElementById("stationInfo").textContent = info;
+      log(`🚉 [${station}] 칸 정보 확인: ${info}`);
+    }
+
+    function log(msg) {
+      const logBox = document.getElementById("logBox");
+      const timestamp = new Date().toLocaleTimeString();
+      logBox.innerHTML += `[${timestamp}] ${msg}<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    const events = [
+      "💰 코인 대박! 현재 보유한 코인이 1.5배로 증가!",
+      "💸 코인 반토막… 현재 보유한 코인이 절반으로 감소!",
+      "🎁 랜덤 아이템 박스 무작위 아이템을 하나 획득!",
+      "🌟 스타 강탈 작전 다른 팀에게서 스타를 강탈!",
+      "😢 코인 기부 천사 코인 10개를 원하는 팀에게 기부!",
+      "🪙 코인 강탈! 다른 팀을 지정해 코인 10개를 강탈!",
+      "🎫 스타 반값 쿠폰 획득! 스타 가격이 절반이 되는 쿠폰을 얻는다!"
+    ];
+
+    const luckyItems = [
+      "💰 12코인 획득!", "🎲 더블주사위 획득!", "🎯 내맘대로주사위 획득!",
+      "💰 20코인 획득!", "💰 10코인 획득!"
+    ];
+
+    const unluckyItems = [
+      "💸 코인 절반 잃기!", "🌟 스타 하나 잃기!", "💸 12코인 잃기!",
+      "💸 8코인 잃기!", "🚨 서울의 혁명! 모든 팀의 코인을 균등하게 나눕니다!"
+    ];
+
+    const shopItems = [
+      "🎯 내 맘대로 주사위 (10코인)", "🎯 내 맘대로 주사위 (10코인)", "🎯 내 맘대로 주사위(10코인)",
+      "🎯 내 맘대로 주사위 (10코인)", "🎯 내 맘대로 주사위 (10코인)", "🚀 더블주사위 (8코인)",
+      "🐢 애완 쿠파 (상대방 스타 뺏기 20코인)", "🐶 멍멍이 호루라기 (스타 위치 변경 8코인)",
+      "🔁 리버스 주사위 (역주행 6코인)", "💸 코인 주사위 (나온 숫자만큼^3 코인 획득 10코인)"
+    ];
+
+    let eventInterval, luckyInterval, unluckyInterval, shopInterval;
+
+    function drawItem(items, resultId, historyId, prefix = "") {
+      const resultDiv = document.getElementById(resultId);
+      const historyDiv = document.getElementById(historyId);
+      let count = 0;
+      let interval = setInterval(() => {
+        const index = Math.floor(Math.random() * items.length);
+        resultDiv.textContent = items[index];
+        count++;
+        if (count > 20) {
+          clearInterval(interval);
+          const finalItem = items[Math.floor(Math.random() * items.length)];
+          resultDiv.textContent = finalItem;
+          const historyItem = document.createElement("div");
+          historyItem.className = "history-item";
+          historyItem.textContent = `[${new Date().toLocaleTimeString()}] ${prefix} ${finalItem}`;
+          historyDiv.appendChild(historyItem);
+        }
+      }, 100);
+      return interval;
+    }
+
+    function drawEvent() {
+      clearInterval(eventInterval);
+      eventInterval = drawItem(events, "result-event", "history-event", "👉");
+    }
+
+    function drawLucky() {
+      clearInterval(luckyInterval);
+      luckyInterval = drawItem(luckyItems, "result-lucky", "history-lucky", "🍀");
+    }
+
+    function drawUnlucky() {
+      clearInterval(unluckyInterval);
+      unluckyInterval = drawItem(unluckyItems, "result-unlucky", "history-unlucky", "💀");
+    }
+
+    function drawShop() {
+      clearInterval(shopInterval);
+      const resultDiv = document.getElementById("result-shop");
+      const historyDiv = document.getElementById("history-shop");
+
+      let shuffled = [...shopItems].sort(() => Math.random() - 0.5);
+      let selected = [];
+      let hasSpecial = false;
+
+      for (let item of shuffled) {
+        if (item.includes("내 맘대로 주사위")) {
+          if (hasSpecial) continue;
+          hasSpecial = true;
+        }
+        if (!selected.includes(item)) selected.push(item);
+        if (selected.length === 3) break;
+      }
+
+      resultDiv.innerHTML = selected.map(i => `🛍️ ${i}`).join("<br>");
+      const historyItem = document.createElement("div");
+      historyItem.className = "history-item";
+      historyItem.innerHTML = `[${new Date().toLocaleTimeString()}]<br>` + selected.map(i => `🛍️ ${i}`).join("<br>");
+      historyDiv.appendChild(historyItem);
+    }
+
+const multipliers = [0, 0.2, 0.5, 1, 2, 5];
+
+function spinRoulette() {
+  const input = document.getElementById("betAmount");
+  const amount = parseInt(input.value);
+  if (isNaN(amount) || amount <= 0) {
+    alert("올바른 코인 수를 입력하세요.");
+    return;
+  }
+
+  const multiplier = multipliers[Math.floor(Math.random() * multipliers.length)];
+  const resultCoins = Math.floor(amount * multiplier);
+
+  const resultText = `배수: x${multiplier} → 획득 코인: ${resultCoins}개`;
+  document.getElementById("betResult").textContent = resultText;
+
+  const now = new Date().toLocaleTimeString();
+  const historyItem = document.createElement("div");
+  historyItem.className = "history-item";
+  historyItem.textContent = `[${now}] ${amount}코인 배팅 → x${multiplier} → ${resultCoins}개 획득`;
+  document.getElementById("betHistory").appendChild(historyItem);
+}
+
+  </script>
+</body>
+</html>
