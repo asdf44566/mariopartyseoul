@@ -52,6 +52,8 @@
   <div id="gameArea" class="hidden">
     <p><strong>선택한 캐릭터:</strong> <span id="currentCharacter"></span></p>
     <p><strong>능력 설명:</strong> <span id="abilityDesc"></span></p>
+    <p><strong>선택한 시간:</strong> <span id="characterTime">-</span></p>
+
 
     <button onclick="rollDice()">🎲 주사위 굴리기</button>
     <p>주사위 결과: 
@@ -117,6 +119,9 @@
       character = name;
       document.getElementById("currentCharacter").textContent = name;
       document.getElementById("abilityDesc").textContent = characterAbilities[name];
+      const now = new Date().toLocaleTimeString();
+      document.getElementById("characterTime").textContent = now;
+
       document.getElementById("characterSelection").classList.add("hidden");
       document.getElementById("gameArea").classList.remove("hidden");
       updateAbilityButtons();
