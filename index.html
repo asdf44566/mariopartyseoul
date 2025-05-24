@@ -143,7 +143,7 @@
     function useMario() {
       if (marioUses > 0) {
         marioUses--;
-        log(`🏪 마리오 능력 사용! 상점 어디서든 접근 가능 (${marioUses}회 남음)`);
+        log(`🏪 마리오 능력 사용! 상점 지금 바로 가능 (${marioUses}회 남음)`);
         updateAbilityButtons();
       }
     }
@@ -170,7 +170,7 @@
       let abilityMessage = "";
 
       if (character === '피치' && Math.random() < 0.10) {
-        abilityMessage = "💰 코인 수금!";
+        abilityMessage = "💰 코인 수금! 바로 키노피오에게 알리세요!";
         log("💰 피치 능력 발동! 모든 팀에게서 5코인씩 수금!");
       }
       if (character === '요시' && Math.random() < 0.05) {
